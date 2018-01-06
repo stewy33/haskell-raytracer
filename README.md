@@ -10,10 +10,10 @@ After cloning this repository, run `stack build` and then `stack exec example`
 and an image will be outputted to `example.png`. The actual raytracing module
 is in `src/Raytracer.hs` and the example scene is in `example/Main.hs`.
 
-It currently supports spheres and planes, solid colored diffuse and reflective
-materials, ambient lighting, and different fields-of-view and light directions.
-It has decent performance, but I'm sure many optimizations could be made.
+It currently supports spheres and planes, solid colored diffuse, reflective,
+and specular materials (Phong shading), ambient lighting, and different fields-of-view and light
+directions.
 
-When running the example, you should get the image below (rendered in 4k):
+When running the example, you should get the image below (rendered in 2k):
 
 ![alt text](example.png "Sample Image")

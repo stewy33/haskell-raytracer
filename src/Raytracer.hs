@@ -12,6 +12,7 @@ cot x' = cos x / sin x
   where
     x = x' / 180 * pi
 
+-- default round implementation of Word mods values but we don't want that
 wordRound :: (RealFrac a, Ord a) => a -> Word16
 wordRound a
   | a > fromIntegral m = m
@@ -24,6 +25,7 @@ nonNeg a
   | a < 0 = 0
   | otherwise = a
 
+-- Vector definition and utility functions
 data Vec3 =
   Vec3 Double
        Double
@@ -56,6 +58,9 @@ normalize v@(Vec3 x y z)
   where
     mag' = mag v
 
+reflectionDir :: Vec3 -> Vec3 -> Vec3
+reflectionDir dir norm = dir `minus` (2 `mult` dir `dot` norm `mult` norm)
+
 data Ray = Ray
   { origin :: Vec3
   , direction :: Vec3
@@ -80,6 +85,8 @@ color r g b = PixelRGB16 (f r) (f g) (f b)
   where
     f a = 257 * fromIntegral a
 
+-- mix two colors together using the supplied function
+-- uses Num and RealFrac to keep eliminate boilerplate
 mix :: (Num a, Num b, RealFrac c) => (a -> b -> c) -> Color -> Color -> Color
 mix f (PixelRGB16 r1 g1 b1) (PixelRGB16 r2 g2 b2) =
   PixelRGB16 (f' r1 r2) (f' g1 g2) (f' b1 b2)
@@ -120,11 +127,14 @@ data Mat = Mat
   }
 
 data MatType
-  = Diffuse { diffuseCoefficient :: Double }
+  = Diffuse { albedo :: Double }
   | Reflective { reflectivity :: Double }
+  | Specular { shininess :: Int
+             , specAlbedo :: Double
+             , specularCoefficient :: Double }
 
 getColor :: Maybe Object -> Ray -> Scene -> Int -> Color
--- if doesn't collide with any objects
+-- if doesn't collide with any objects return background color
 getColor Nothing _ scene _ = background scene
 -- stop at maximum recursion depth
 getColor _ _ scene 5 = PixelRGB16 0 0 0
@@ -134,18 +144,29 @@ getColor (Just (Object (Mat colo (Diffuse dc)) f)) (Ray pos _) scene n
   | otherwise = cmap (ambient *) colo
   where
     Lighting lightDir ambient = lighting scene
-    factor = normal f pos `dot` lightDir
-    darken a = ambient * a + nonNeg (dc * factor * a)
+    factor = nonNeg $ normal f pos `dot` lightDir
+    darken a = ambient * a + dc * factor * a
 -- for metallic objects
 getColor (Just (Object (Mat colo (Reflective r)) f)) (Ray pos dir) scene n =
   mixedColor
   where
     mixedColor = mix (\refl c -> c * (1 - r) + r * refl) reflectColor colo
     reflectColor = getColor closestObj hitRay scene $ n + 1
-    hitRay = Ray (pointOnRay closestHit reflectionRay) $ direction reflectionRay
-    (closestHit, closestObj) = getClosestHit reflectionRay $ objects scene
-    reflectionRay = Ray pos $ dir `minus` (2 `mult` dir `dot` norm `mult` norm)
-    norm = normal f pos
+    hitRay = Ray (pointOnRay closestHit reflRay) $ direction reflRay
+    (closestHit, closestObj) = getClosestHit reflRay $ objects scene
+    reflRay = Ray pos . reflectionDir dir $ normal f pos
+-- for specular surfaces
+getColor (Just (Object (Mat colo (Specular shin dc sc)) f)) r@(Ray pos dir) scene n =
+  mixedColor
+  where
+    mixedColor =
+      cmap
+        (\c -> c + specFactor * fromIntegral (maxBound :: Word16))
+        diffuseColor
+    diffuseColor = getColor (Just (Object (Mat colo (Diffuse dc)) f)) r scene 0
+    specFactor = sc * nonNeg (invert specDir `dot` dir) ^^ shin
+    specDir = reflectionDir lightDir $ normal f pos
+    lightDir = invert . lightDirection $ lighting scene
 
 -- intersect takes Ray with normalized direction and Object
 -- and returns distance on the ray where intersection occurs or a negative
