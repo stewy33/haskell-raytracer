@@ -36,7 +36,7 @@ main =
   where
     bg = color 30 100 250
     cam =
-      Camera {camPos = Vec3 0 2 0, resolution = (1600, 1600), fieldOfView = 90}
+      Camera {camPos = Vec3 0 2 0, resolution = (4096, 4096), fieldOfView = 90}
     -- supply inverted direction of light
     lights =
       Lighting
